@@ -1,73 +1,84 @@
-# Modbus Workbench — Tauri 2.x + Rust
+# Modbus Workbench
 
-跨平台（**macOS 优先，兼顾 Windows / Linux**）的 Modbus 调试 / 测试工作台。
-**不使用 Electron**：UI 层由系统原生 WebView 承载，业务内核为纯 Rust（`modbus-core`）。
+一个面向开发、调试和联调的 Modbus 工作台。应用使用 **Tauri 2.x + Rust + Vite + TypeScript** 构建，支持 macOS，并兼顾 Windows / Linux。
 
-## 技术栈
-- **Tauri 2.x** —— 应用外壳、命令桥接、菜单栏（NSStatusBar）、原生菜单、窗口 Vibrancy。
-- **Rust `modbus-core`** —— 零 UI 依赖的协议内核（帧编解码、传输、主站、从站/模拟器、脚本、配置）。
-- **前端** —— Vite + TypeScript + `@tauri-apps/api`（连接/寄存器网格/报文日志/帧构造/脚本界面）。
+它同时提供 Modbus 主站工作台和内置从站模拟器，可用于验证设备通信、观察底层报文，以及在没有真实从站设备时进行联调。
 
-## 目录结构
-```
-modbus-workbench/
-├── Cargo.toml                 # workspace（modbus-core + src-tauri）
-├── crates/modbus-core/        # 协议内核（可单独 cargo test）
-│   └── src/
-│       ├── crc.rs             # CRC-16/MODBUS
-│       ├── framing.rs         # TCP(MBAP) / RTU 帧编解码 + CRC 校验
-│       ├── data.rs            # 寄存器格式化 / 字序(ABCD·CDAB·BADC·DCBA)
-│       ├── client.rs          # 异步主站（读/写/重试）
-│       ├── slave.rs           # 从站数据区与请求处理
-│       ├── simulator.rs       # 内置模拟器（自增/正弦/随机变化）
-│       ├── transport/         # tcp.rs（就绪）/ rtu.rs（feature rtu）
-│       ├── scripting.rs       # Lua 自动化脚本宿主（feature scripting）
-│       └── workspace.rs       # .mbw 配置序列化
-├── src-tauri/                 # Tauri 2.x 应用
-│   ├── src/{main,state,commands,tray}.rs
-│   ├── tauri.conf.json
-│   └── capabilities/default.json
-├── index.html / src/          # 前端（Vite）
-├── package.json / vite.config.ts / tsconfig.json
-└── gen_icon.cjs               # 生成占位应用图标
-```
+## 功能
 
-## 内核测试（无需 GUI）
+- 支持 Modbus TCP、Modbus UDP、RTU over TCP、RTU over UDP 和 Modbus RTU 串口通信。
+- 支持功能码 `01`、`02`、`03`、`04`、`05`、`06`、`15`、`16` 的读写操作。
+- 支持多组轮询配置，可为每组配置独立的地址、操作和周期，并行执行。
+- 实时查看请求和响应的 PDU / ADU、十六进制字节流及往返耗时。
+- 支持 `U16`、`I16`、`U32`、`I32`、`F32` 数据格式，以及 `ABCD`、`CDAB`、`BADC`、`DCBA` 字序转换。
+- 内置从站模拟器，支持多 Unit、寄存器批量创建、地址冲突检查和寄存器自动变化。
+- 支持模拟器寄存器配置的 Excel `.xlsx` 导入与导出。
+
+## 快速开始
+
+### 使用桌面应用
+
+环境要求：
+
+- Node.js 和 npm
+- Rust 工具链
+- Tauri 2 开发环境（系统 WebView、平台编译依赖）
+
+安装依赖并启动开发版本：
+
 ```bash
-cargo test -p modbus-core                 # 17 个用例：CRC / 帧 / 字序 / 从站 / 模拟器 / 配置
-cargo check -p modbus-core --features rtu,scripting   # 校验 RTU 串口 + Lua 脚本模块
+npm install
+npm run tauri dev
 ```
 
-## 运行与构建
+构建发布包：
+
 ```bash
-# —— Rust 侧（无需 Node 即可验证内核与编译）——
-cargo test -p modbus-core                     # 17 用例全绿
-cargo build -p modbus-workbench               # 完整二进制链接通过（已验证）
-cargo check -p modbus-core --features rtu,scripting   # RTU 串口 + Lua 脚本模块
-
-# —— 完整桌面应用（前端 + 原生壳）——
-npm install                 # 安装前端依赖（@tauri-apps/api 等）
-npm run tauri dev           # 开发模式：启动 Vite + Rust 后端
-npm run tauri build         # 产出各平台安装包（macOS: .app / .dmg）
+npm run tauri build
 ```
-> 本机已验证：`modbus-core` 17 个测试全绿，`src-tauri` 完整 `cargo build` 成功链接
-> （含 tauri v2.11.5 / mlua / serial2 / window-vibrancy / tray-icon），零编译错误、零警告。
-> 运行完整 GUI 需先 `npm install && npm run build` 产出前端 `dist`，再 `npm run tauri dev`。
 
-## macOS 注意事项
-- **菜单栏常驻**：`src-tauri/src/tray.rs` 用 `TrayIconBuilder` 在状态栏放置图标 + 右键菜单。
-- **原生视觉**：`main.rs` 在 macOS 上套用 `window_vibrancy`（需 `tauri.conf.json` 中
-  `macOSPrivateApi: true`）。
-- **串口(RTU)权限**：USB-RS485 适配器需安装 FTDI/CH340/SiLabs 驱动；应用若开启沙箱，
-  需配置 `com.apple.security.device.serial` entitlement，否则读不到 `/dev/cu.*`。
-- **同机主从互连**：用虚拟串口对，例如
-  `socat PTY,raw,echo=0 PTY,raw,echo=0` 得到 `/dev/ttys0xx`↔`/dev/ttys1xx` 一对，
-  从站起其一、主站连其二。
-- **分发信任**：发布前需 **代码签名 + 公证（Notarization）**，否则 Gatekeeper 拦截。
+构建产物位于 `src-tauri/target/release/` 及其平台对应的 bundle 目录中。
 
-## 已实现 / 待补全
-- 已实现：内核（CRC/帧/字序/主站/从站/模拟器/配置/Lua 脚本）、Tauri 命令桥接、菜单栏、
-  前端连接/读写/轮询/模拟器/帧下发/脚本/配置界面。
-- 待补全（工程化下一步）：报文日志环形缓冲与导出、实时曲线(uPlot/ECharts)、
-  RTU 连接命令、脚本驱动真实在线主站（当前脚本绑定内置模拟器）、单元/集成测试覆盖率、
-  Windows/Linux 打包验证。
+### 验证 Rust 内核
+
+无需启动图形界面即可运行核心测试：
+
+```bash
+cargo test -p modbus-core
+```
+
+## 主站工作台
+
+1. 点击左上角的 **连接**，选择通信方式并填写连接参数。
+2. 在轮询配置中选择功能码、Unit ID、起始地址和数量。
+3. 读操作可以开启定时轮询，也可以点击 **发送** 执行一次读取。
+4. 写操作填写写入值后发送。功能码 `15` 和 `16` 支持使用逗号分隔的多个值，数量会根据实际值数量自动计算。
+5. 在报文追踪区域查看请求和响应的 PDU、ADU、字节流与耗时。
+6. 在寄存器解析表中切换数据格式和字序，也可以直接修改单行数据并执行写入。
+
+## 从站模拟器
+
+点击工具栏中的 **模拟器** 打开独立的从站模拟器窗口。
+
+- 在通道设置中配置并启用 TCP、UDP、RTU over TCP、RTU over UDP 或串口 RTU 通道。
+- 新增寄存器时可设置 Unit、区域、地址、名称、数据类型、访问模式和数量。
+- 每个寄存器可选择 `Off`、`Sine`、`Random` 或 `Increment` 变化方式。
+- 通过 **导入 Excel** / **导出 Excel** 管理当前 Unit 的寄存器配置。
+- 读取未显式配置的地址时，模拟器返回 `0xFFFF`，便于区分“无数据”与有效的零值。
+
+## 项目结构
+
+```text
+crates/modbus-core/   Rust Modbus 协议内核、传输层、主站、从站和模拟器
+src-tauri/            Tauri 命令桥接和桌面应用后端
+src/                  Vite + TypeScript 前端
+使用说明.md           界面功能和操作细节
+```
+
+协议内核可以独立测试和复用；桌面应用通过 Tauri 命令调用 Rust 后端完成通信和模拟器管理。
+
+## macOS 串口提示
+
+使用 USB-RS485 适配器时，请先安装对应的 FTDI、CH340 或 SiLabs 驱动。串口通常显示为 `/dev/cu.*`。如果系统或打包配置启用了沙箱，还需要为应用配置串口访问权限。
+
+更完整的操作步骤、参数说明和模拟器细节，请参阅 [使用说明.md](使用说明.md)。
