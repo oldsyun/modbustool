@@ -1,0 +1,25 @@
+[package]
+name = "modbus-workbench"
+version = "0.1.0"
+description = "Modbus Workbench — Tauri 2.x + Rust desktop Modbus debugging/testing tool"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+tauri-plugin-dialog = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+modbus-core = { path = "../crates/modbus-core", features = ["rtu"] }
+tokio = { workspace = true }
+window-vibrancy = "0.5"
+serial2 = "0.2"
+rust_xlsxwriter = { workspace = true }
+calamine = { workspace = true }
+
+[features]
+# Default nothing extra; modbus-core enables rtu via path.
+default = []

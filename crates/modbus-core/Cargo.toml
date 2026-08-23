@@ -1,0 +1,20 @@
+[package]
+name = "modbus-core"
+version = "0.1.0"
+edition = "2021"
+description = "Modbus protocol core (framing, transport, slave, simulator) — UI-agnostic, testable."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+serial2 = { version = "0.2", optional = true }
+
+[features]
+default = []
+# RTU serial transport (needs a USB-RS485 adapter / virtual pair on macOS)
+rtu = ["dep:serial2"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

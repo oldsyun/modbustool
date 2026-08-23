@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = ["crates/modbus-core", "src-tauri"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+# 只保留实际使用的 tokio 子功能，减少编译产物
+tokio = { version = "1", features = ["net", "rt", "rt-multi-thread", "macros", "sync", "time", "io-util"] }
+# Excel 导入/导出
+rust_xlsxwriter = "0.80"
+calamine = { version = "0.25", features = ["dates"] }
+
+# ── Release 体积优化 ─────────────────────────────────────────────
+[profile.release]
+# 全程序链接时优化：把所有 crate 合并优化，大幅消除死代码
+lto = "fat"
+# 减小代码大小（比 opt-level=3 可能更小；可改回 3 以换取更快运行速度）
+opt-level = "z"
+# 单一代码生成单元：LTO 更彻底，但编译慢；如需加速可改为 4
+codegen-units = 1
+# strip 掉调试符号（macOS 上 release 默认已无 debuginfo，此处显式声明）
+strip = true
+# 启用 panic=abort 去掉 unwinding 代码段（可减少约 100-300 KB）
+panic = "abort"

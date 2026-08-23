@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modbus Tool</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <!-- ══════════════ Toolbar ══════════════ -->
+  <header id="toolbar">
+    <div class="toolbar-left">
+      <span class="brand">▦ Modbus Tool</span>
+      <button class="tb-btn primary" id="btnConnect" title="连接/断开">⬤ 连接</button>
+      <button class="tb-btn" id="btnPlcAddr" title="PLC 地址"># PLC 地址</button>
+      <button class="tb-btn" id="btnAddPoll" title="添加轮询">+ 添加轮询</button>
+      <button class="tb-btn" id="btnDelPoll" title="删除轮询">— 删除轮询</button>
+      
+      <!-- 轮询周期 -->
+      <div id="pollPeriodGroup" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 4px;">
+        <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500; white-space: nowrap;">周期(ms)</span>
+        <input id="pollPeriod" type="number" value="500" min="50" max="60000" style="width: 70px; height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); color: var(--text); outline: none;" />
+      </div>
+      
+      <!-- 轮询启动/停止按钮 -->
+      <button class="tb-btn primary" id="chkAutoPoll" title="开始定时轮询" disabled>⬤ 轮询</button>
+
+      <div class="toolbar-sep"></div>
+      <button class="tb-btn" id="btnSimulator" title="模拟器">⚙ 模拟器</button>
+    </div>
+  </header>
+
+  <!-- ══════════════ Main Content ══════════════ -->
+  <main>
+    <!-- Poll Configuration Panel -->
+    <section class="poll-panel" id="pollPanel">
+      <div class="poll-tabs">
+        <div class="poll-tab-list" id="pollTabList"></div>
+        <button class="poll-tab-add" id="btnAddPollTab" title="添加轮询">+</button>
+      </div>
+      <div class="poll-controls">
+        <label class="pc-group name-group" style="display: none;">
+          <span class="pc-label">名称</span>
+          <input id="pollName" value="轮询 1" />
+        </label>
+        <label class="pc-group narrow">
+          <span class="pc-label">Unit ID</span>
+          <input id="pollUnitId" type="number" value="1" min="1" max="247" />
+        </label>
+        <label class="pc-group">
+          <span class="pc-label">操作</span>
+          <select id="pollFunc">
+            <option value="03" selected>03 读保持寄存器</option>
+            <option value="04">04 读输入寄存器</option>
+            <option value="01">01 读线圈</option>
+            <option value="02">02 读离散输入</option>
+            <option value="05">05 写单个线圈</option>
+            <option value="06">06 写单个保持寄存器</option>
+            <option value="15">15 写多个线圈</option>
+            <option value="16">16 写多个保持寄存器</option>
+          </select>
+        </label>
+        <label class="pc-group narrow">
+          <span class="pc-label">起始地址</span>
+          <input id="pollStartAddr" type="number" value="0" min="0" max="65535" />
+        </label>
+        <label class="pc-group narrow" id="pollCountGroup">
+          <span class="pc-label">数量</span>
+          <input id="pollCount" type="number" value="10" min="1" max="2000" />
+        </label>
+        <label class="pc-group" id="pollValGroup" style="display: none;">
+          <span class="pc-label">写入值</span>
+          <input id="pollValue" placeholder="单个值(如 220) 或 逗号(如 1,0,1)" />
+        </label>
+        <label class="pc-group" id="pollByteOrderGroup">
+          <span class="pc-label">字序(默认)</span>
+          <select id="pollByteOrder">
+            <option value="abcd" selected>ABCD (Big-endian)</option>
+            <option value="cdab">CDAB (Word-swapped)</option>
+            <option value="badc">BADC (Mid-little)</option>
+            <option value="dcba">DCBA (Little-endian)</option>
+          </select>
+        </label>
+        <button class="tb-btn primary" id="btnSendOnce" title="发送指令" disabled style="height:34px; padding: 0 14px; font-weight: 500; margin-bottom: 0;">发送</button>
+
+      </div>
+
+      <!-- Last command trace row -->
+      <div id="pollTraceRow" style="font-size:11px; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-light); width: 100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; width: 100%;">
+          <span style="font-weight: 500;">通讯报文 Trace</span>
+          <button class="tb-btn tiny" id="btnToggleTrace" style="margin: 0; padding: 2px 8px; font-size: 10px; height: 20px; line-height: 16px;">隐藏</button>
+        </div>
+        <div id="pollTraceContent" style="display:flex; flex-direction:column; gap:4px; margin-top:4px; width: 100%;">
+          <div>发送：<code id="txtPollSentAdu" style="color:var(--accent); font-family:monospace; font-weight:bold;">--</code></div>
+          <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <span>接收：<code id="txtPollRecvAdu" style="color:var(--success); font-family:monospace; font-weight:bold;">--</code></span>
+            <span>耗时：<code id="txtPollRtt" style="color:var(--text-tertiary); font-family:monospace; font-weight:bold;">--</code></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Data Table -->
+    <section class="data-area">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="col-addr">点位</th>
+            <th class="col-raw">原始字</th>
+            <th class="col-format">显示格式</th>
+            <th class="col-order">字节序</th>
+            <th class="col-parsed">解析值</th>
+            <th class="col-op">操作</th>
+          </tr>
+        </thead>
+        <tbody id="dataTableBody">
+          <!-- rows populated by JS -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Communication Log (collapsible) -->
+    <section class="log-section">
+      <details open>
+        <summary>通信日志</summary>
+        <pre id="logOutput"></pre>
+      </details>
+    </section>
+  </main>
+
+  <!-- ══════════════ Status Bar ══════════════ -->
+  <footer id="statusBar">
+    <span id="statusConn">未连接</span>
+    <span class="status-sep">|</span>
+    <span id="statusPoll">已停止</span>
+  </footer>
+
+  <!-- ══════════════ Connection Dialog (modal) ══════════════ -->
+  <dialog id="connectDialog" class="modal conn-modal">
+    <div class="modal-header">
+      <strong>通道连接</strong>
+      <button class="modal-close" id="dlgClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="conn-section-label">连接模式</div>
+      <div class="conn-radios">
+        <label class="radio-item" data-mode="tcp">
+          <input type="radio" name="connMode" value="tcp" />
+          <span class="radio-dot"></span>
+          <span>TCP/UDP</span>
+        </label>
+        <label class="radio-item active" data-mode="rtu">
+          <input type="radio" name="connMode" value="rtu" />
+          <span class="radio-dot"></span>
+          <span>RTU（串口）</span>
+        </label>
+        <label class="radio-item" data-mode="rtuotcp">
+          <input type="radio" name="connMode" value="rtuotcp" />
+          <span class="radio-dot"></span>
+          <span>RTU over TCP/UDP</span>
+        </label>
+      </div>
+
+      <!-- TCP/UDP 与 RTU over TCP/UDP 共用主机/端口 -->
+      <div class="conn-fields" data-show-for="tcp rtuotcp">
+        <label class="form-row">
+          <span class="form-label">主机</span>
+          <input id="connHost" value="192.168.0.10" placeholder="IP 或主机名" />
+        </label>
+        <label class="form-row">
+          <span class="form-label">端口</span>
+          <input id="connPort" type="number" value="502" />
+        </label>
+      </div>
+
+      <!-- 传输方式：TCP/UDP 模式下选择（TCP 流 / UDP 数据报，MBAP 帧） -->
+      <div class="conn-fields hidden" data-show-for="tcp">
+        <label class="form-row">
+          <span class="form-label">传输协议</span>
+          <select id="connTransport">
+            <option value="tcp" selected>TCP（流式）</option>
+            <option value="udp">UDP（数据报）</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- RTU over TCP/UDP：IP 承载方式（RTU 帧，无 MBAP 头） -->
+      <div class="conn-fields hidden" data-show-for="rtuotcp">
+        <label class="form-row">
+          <span class="form-label">传输协议</span>
+          <select id="rtuOverIpTransport">
+            <option value="tcp" selected>Modbus RTU over TCP/IP</option>
+            <option value="udp">Modbus RTU over UDP/IP</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- RTU serial fields -->
+      <div class="conn-fields hidden" data-show-for="rtu">
+        <label class="form-row">
+          <span class="form-label">串口</span>
+          <div class="form-row-right">
+            <select id="rtuPort">
+              <option value="">加载中...</option>
+            </select>
+            <button class="tb-btn small" id="btnRefreshPorts" title="刷新串口列表">↻</button>
+          </div>
+        </label>
+        <label class="form-row">
+          <span class="form-label">波特率</span>
+          <div class="form-row-right">
+            <select id="rtuBaud">
+              <option value="9600" selected>9600</option>
+              <option value="19200">19200</option>
+              <option value="38400">38400</option>
+              <option value="57600">57600</option>
+              <option value="115200">115200</option>
+            </select>
+          </div>
+        </label>
+        <label class="form-row">
+          <span class="form-label">数据位</span>
+          <div class="form-row-right">
+            <select id="rtuDataBits">
+              <option value="8" selected>8</option>
+              <option value="7">7</option>
+            </select>
+          </div>
+        </label>
+        <label class="form-row">
+          <span class="form-label">停止位</span>
+          <div class="form-row-right">
+            <select id="rtuStopBits">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
+        </label>
+        <label class="form-row">
+          <span class="form-label">校验</span>
+          <div class="form-row-right">
+            <select id="rtuParity">
+              <option value="none" selected>None</option>
+              <option value="even">Even</option>
+              <option value="odd">Odd</option>
+            </select>
+          </div>
+        </label>
+      </div>
+
+      <div class="conn-section-label">公共</div>
+      <label class="form-row">
+        <span class="form-label">超时(ms)</span>
+        <input id="connTimeout" type="number" value="1000" />
+      </label>
+      <label class="form-row">
+        <span class="form-label">重试:次数</span>
+        <input id="connRetries" type="number" value="1" />
+      </label>
+      <label class="form-row">
+        <span class="form-label">帧间延迟(ms)</span>
+        <input id="connInterFrame" type="number" placeholder="例: 20（留空 = 按波特率自动计算）" />
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="tb-btn" id="dlgCancel">× 取消</button>
+      <button class="tb-btn primary" id="dlgConnect">⇄ 连接</button>
+    </div>
+  </dialog>
+
+  <!-- Write Dialog（由表格行内"写入"按钮触发） -->
+  <dialog id="writeDialog" class="modal">
+    <div class="modal-header">
+      <strong id="writeDlgTitle">写入寄存器</strong>
+      <button class="modal-close" id="writeDlgClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="write-hint" id="writeHint"></div>
+      <label class="form-row">
+        <span class="form-label">数值</span>
+        <input id="writeValue" type="text" placeholder="数值（支持 0x 十六进制，如 0x1A）" autofocus />
+      </label>
+      <div class="write-error" id="writeError"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="tb-btn" id="writeDlgCancel">取消</button>
+      <button class="tb-btn primary" id="writeDlgOk">写入</button>
+    </div>
+  </dialog>
+
+  <!-- 通用提示 / 警告弹窗（写入溢出等场景复用） -->
+  <dialog id="alertDialog" class="modal">
+    <div class="modal-header">
+      <strong id="alertTitle">提示</strong>
+      <button class="modal-close" id="alertClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-msg" id="alertMsg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="tb-btn primary" id="alertOk">确定</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
