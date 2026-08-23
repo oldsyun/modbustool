@@ -1891,7 +1891,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "modbus-workbench"
+name = "modbus-tool"
 version = "0.1.0"
 dependencies = [
  "calamine",
