@@ -1,4 +1,4 @@
-# Modbus Workbench
+# Modbus Tool
 
 一个面向开发、调试和联调的 Modbus 工作台。应用使用 **Tauri 2.x + Rust + Vite + TypeScript** 构建，支持 macOS，并兼顾 Windows / Linux。
 
