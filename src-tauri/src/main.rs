@@ -1,11 +1,12 @@
 // Modbus Workbench — Tauri 2.x application entry point.
 
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod commands;
 mod state;
 mod simreg;
 
 use state::AppState;
-use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
@@ -22,6 +23,7 @@ fn main() {
             // Native frosted-glass vibrancy (requires macOSPrivateApi: true).
             #[cfg(target_os = "macos")]
             {
+                use tauri::Manager;
                 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = apply_vibrancy(

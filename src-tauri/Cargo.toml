@@ -1,7 +1,7 @@
 [package]
-name = "modbus-workbench"
+name = "modbus-tool"
 version = "0.1.0"
-description = "Modbus Workbench — Tauri 2.x + Rust desktop Modbus debugging/testing tool"
+description = "Modbus tool — Tauri 2.x + Rust desktop Modbus debugging/testing tool"
 edition = "2021"
 rust-version = "1.77"
 
