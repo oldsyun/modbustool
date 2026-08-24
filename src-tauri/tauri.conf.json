@@ -29,7 +29,10 @@
   "bundle": {
     "active": true,
     "targets": [
-      "app"
+      "appimage",
+      "deb",
+      "dmg",
+      "msi"
     ],
     "icon": [
       "icons/icon.png"
