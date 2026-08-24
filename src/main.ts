@@ -583,6 +583,12 @@ const polls: PollConfig[] = [
 ];
 let activePollId = polls[0].id;
 
+function parsePollStartAddr(value: string): number {
+  const text = value.trim();
+  const addr = /^0x[0-9a-f]+$/i.test(text) ? parseInt(text.slice(2), 16) : Number(text);
+  return Number.isInteger(addr) && addr >= 0 && addr <= 0xffff ? addr : 0;
+}
+
 // 每个轮询最近一次数据缓存（切换标签页时显示各自数据）
 const pollDataCache = new Map<number, { addr: number; regs: number[] }>();
 // 后台正在运行的轮询任务集合（前端镜像，用于停止/删除）
@@ -598,7 +604,7 @@ function saveControlsToPoll() {
   p.name = ($("pollName") as HTMLInputElement).value || p.name;
   p.unitId = Number(($("pollUnitId") as HTMLInputElement).value) || p.unitId;
   p.func = ($("pollFunc") as HTMLSelectElement).value;
-  p.startAddr = Number(($("pollStartAddr") as HTMLInputElement).value) || 0;
+  p.startAddr = parsePollStartAddr(($('pollStartAddr') as HTMLInputElement).value);
   p.count = Number(($("pollCount") as HTMLInputElement).value) || 1;
   p.period = Number(($("pollPeriod") as HTMLInputElement).value) || 500;
   p.writeValue = ($("pollValue") as HTMLInputElement).value || "";
