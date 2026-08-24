@@ -80,6 +80,8 @@ fn main() {
             commands::sim_reg_export_xlsx,
             commands::sim_reg_import_xlsx,
             commands::export_log_txt,
+            commands::save_project_file,
+            commands::import_project_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Modbus Tool");

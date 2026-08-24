@@ -1258,6 +1258,51 @@ pub async fn export_log_txt(app: AppHandle, content: String) -> Result<String, S
 }
 
 // ══════════════════════════════════════════════════════════════════
+// 项目配置导入与导出
+// ══════════════════════════════════════════════════════════════════
+
+/// 弹出「另存为」对话框，将项目配置 JSON 字符串保存到文件。
+/// 返回保存路径（用户取消则返回空字符串）。
+#[tauri::command]
+pub async fn save_project_file(app: AppHandle, content: String) -> Result<String, String> {
+    let path = app
+        .dialog()
+        .file()
+        .add_filter("Modbus Tool 项目文件", &["json", "mbproj"])
+        .add_filter("所有文件", &["*"])
+        .set_file_name("modbus_project.json")
+        .blocking_save_file();
+
+    let path = match path {
+        Some(p) => p.to_string(),
+        None => return Ok(String::new()), // 用户取消
+    };
+
+    std::fs::write(&path, &content).map_err(|e| format!("保存项目文件失败：{e}"))?;
+    Ok(path)
+}
+
+/// 弹出「打开文件」对话框，读取项目配置文件并返回文件内容。
+/// 若用户取消则返回空字符串。
+#[tauri::command]
+pub async fn import_project_file(app: AppHandle) -> Result<String, String> {
+    let path = app
+        .dialog()
+        .file()
+        .add_filter("Modbus Tool 项目文件", &["json", "mbproj"])
+        .add_filter("所有文件", &["*"])
+        .blocking_pick_file();
+
+    let path = match path {
+        Some(p) => p.to_string(),
+        None => return Ok(String::new()), // 用户取消
+    };
+
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("读取项目文件失败：{e}"))?;
+    Ok(content)
+}
+
+// ══════════════════════════════════════════════════════════════════
 // 多 Unit 模拟：Unit ID 管理（增删）
 // ══════════════════════════════════════════════════════════════════
 

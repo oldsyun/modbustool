@@ -557,6 +557,13 @@ async function readBackAndRefresh() {
 // Poll Control — 多轮询标签页（共享同一通道）
 // ═══════════════════════════════════════════════════════════
 
+type RowFormat = "u16" | "i16" | "u32" | "i32" | "f32";
+type ByteOrder = "abcd" | "cdab" | "badc" | "dcba";
+interface RowState { format: RowFormat; byteOrder: ByteOrder; }
+
+// 每行独立的格式/字节序选择；addr 为 key
+const rowStates = new Map<number, RowState>();
+
 interface PollConfig {
   id: number;
   name: string;
@@ -566,11 +573,13 @@ interface PollConfig {
   count: number;
   period: number;
   writeValue?: string;
+  byteOrder?: ByteOrder;
+  rowStates?: Record<number, RowState>;
 }
 
 let nextPollId = 0;
 const polls: PollConfig[] = [
-  { id: nextPollId++, name: "轮询 1", unitId: 1, func: "03", startAddr: 0, count: 10, period: 500, writeValue: "" },
+  { id: nextPollId++, name: "轮询 1", unitId: 1, func: "03", startAddr: 0, count: 10, period: 500, writeValue: "", byteOrder: "abcd", rowStates: {} },
 ];
 let activePollId = polls[0].id;
 
@@ -583,7 +592,7 @@ function currentPoll(): PollConfig {
   return polls.find((p) => p.id === activePollId) ?? polls[0];
 }
 
-/** 将面板控件值写回当前轮询配置。 */
+/** 将面板控件值及当前表格各点位格式写回当前轮询配置。 */
 function saveControlsToPoll() {
   const p = currentPoll();
   p.name = ($("pollName") as HTMLInputElement).value || p.name;
@@ -593,6 +602,11 @@ function saveControlsToPoll() {
   p.count = Number(($("pollCount") as HTMLInputElement).value) || 1;
   p.period = Number(($("pollPeriod") as HTMLInputElement).value) || 500;
   p.writeValue = ($("pollValue") as HTMLInputElement).value || "";
+  const boEl = $("pollByteOrder") as HTMLSelectElement | null;
+  if (boEl) {
+    p.byteOrder = boEl.value as ByteOrder;
+  }
+  p.rowStates = Object.fromEntries(rowStates.entries());
 }
 
 /** 动态显隐轮询面板下的各个操作框组 */
@@ -638,7 +652,7 @@ function updatePollControlsVisibility() {
   }
 }
 
-/** 将轮询配置加载到面板控件。 */
+/** 将轮询配置加载到面板控件，并恢复该轮询专属的点位格式设置。 */
 function loadPollToControls(p: PollConfig) {
   $("pollName").value = p.name;
   $("pollUnitId").value = String(p.unitId);
@@ -647,6 +661,18 @@ function loadPollToControls(p: PollConfig) {
   $("pollCount").value = String(p.count);
   $("pollPeriod").value = String(p.period);
   $("pollValue").value = p.writeValue || "";
+  const boEl = $("pollByteOrder") as HTMLSelectElement | null;
+  if (boEl) {
+    boEl.value = p.byteOrder || "abcd";
+  }
+
+  // 恢复该轮询的点位行状态
+  rowStates.clear();
+  if (p.rowStates) {
+    for (const [addrStr, st] of Object.entries(p.rowStates)) {
+      rowStates.set(Number(addrStr), { ...st });
+    }
+  }
   
   updatePollControlsVisibility();
   
@@ -679,7 +705,10 @@ function activatePoll(id: number) {
     currentData = { addr: cached.addr, regs: cached.regs };
     updateRows(cached.addr, cached.regs);
   } else {
-    clearTable();
+    currentData = null;
+    const p = currentPoll();
+    renderTable(p.startAddr, new Array(p.count).fill(0));
+    showTableEmpty();
   }
 }
 
@@ -695,11 +724,16 @@ function addPoll() {
     startAddr: src.startAddr,
     count: src.count,
     period: src.period,
+    byteOrder: src.byteOrder || "abcd",
+    rowStates: {},
   };
   polls.push(np);
   activePollId = np.id;
   renderPollTabs();
   loadPollToControls(np);
+  currentData = null;
+  renderTable(np.startAddr, new Array(np.count).fill(0));
+  showTableEmpty();
   log(`已添加「${np.name}」（Unit ID ${np.unitId}），共享当前通道`, "info");
 }
 
@@ -715,19 +749,27 @@ function removePoll() {
   }
   polls.splice(idx, 1);
   if (polls.length === 0) {
-    polls.push({ id: nextPollId++, name: "轮询 1", unitId: 1, func: "03", startAddr: 0, count: 10, period: 500 });
+    polls.push({ id: nextPollId++, name: "轮询 1", unitId: 1, func: "03", startAddr: 0, count: 10, period: 500, byteOrder: "abcd", rowStates: {} });
   }
   activePollId = polls[0].id;
   pollDataCache.delete(removed.id);
-  rowStates.clear();
   renderPollTabs();
   loadPollToControls(currentPoll());
-  clearTable();
+  const cached = pollDataCache.get(activePollId);
+  if (cached) {
+    currentData = { addr: cached.addr, regs: cached.regs };
+    updateRows(cached.addr, cached.regs);
+  } else {
+    currentData = null;
+    const p = currentPoll();
+    renderTable(p.startAddr, new Array(p.count).fill(0));
+    showTableEmpty();
+  }
   setPolling(runningPollIds.size > 0);
 }
 
 // 控件变化 → 保存回配置（input 实时 + change 兜底）
-["pollName", "pollUnitId", "pollFunc", "pollStartAddr", "pollCount", "pollPeriod", "pollValue"].forEach((id) => {
+["pollName", "pollUnitId", "pollFunc", "pollStartAddr", "pollCount", "pollPeriod", "pollValue", "pollByteOrder"].forEach((id) => {
   const el = $(id);
   if (!el) return;
   el.addEventListener("input", () => {
@@ -741,8 +783,13 @@ function removePoll() {
       if (currentData) {
         renderTable(currentData.addr, currentData.regs);
       } else {
-        refreshTable();
+        renderTable(p.startAddr, new Array(p.count).fill(0));
+        showTableEmpty();
       }
+    }
+    if ((id === "pollStartAddr" || id === "pollCount") && !currentData) {
+      renderTable(p.startAddr, new Array(p.count).fill(0));
+      showTableEmpty();
     }
     if (id === "pollValue" && ["15", "16"].includes(p.func)) {
       const parts = ($("pollValue") as HTMLInputElement).value.split(",").map(s => s.trim()).filter(s => s.length > 0);
@@ -753,7 +800,16 @@ function removePoll() {
       }
     }
   });
-  el.addEventListener("change", saveControlsToPoll);
+  el.addEventListener("change", () => {
+    saveControlsToPoll();
+    if (id === "pollByteOrder") {
+      if (currentData) {
+        updateRows(currentData.addr, currentData.regs);
+      } else {
+        refreshTable();
+      }
+    }
+  });
 });
 
 /** 启动当前已配置的所有轮询队列（各自独立后台任务，共享同一连接通道）。 */
@@ -986,13 +1042,6 @@ $("btnSendOnce").addEventListener("click", () => void sendOnce());
 // ═══════════════════════════════════════════════════════════
 // Data Table Rendering
 // ═══════════════════════════════════════════════════════════
-
-type RowFormat = "u16" | "i16" | "u32" | "i32" | "f32";
-type ByteOrder = "abcd" | "cdab" | "badc" | "dcba";
-interface RowState { format: RowFormat; byteOrder: ByteOrder; }
-
-// 每行独立的格式/字节序选择；addr 为 key
-const rowStates = new Map<number, RowState>();
 
 // 点位显示模式：false = 报文地址（0x00）；true = PLC 地址（40001…）
 let plcAddrMode = false;
@@ -1541,6 +1590,209 @@ $("btnDelPoll").addEventListener("click", () => {
   log("当前轮询已删除", "info");
 });
 
+// ═══════════════════════════════════════════════════════════
+// Project Save / Import — 保存与导入完整工程配置
+// ═══════════════════════════════════════════════════════════
+
+interface ProjectFile {
+  version: number;
+  appName: string;
+  savedAt: string;
+  connection: {
+    mode: ConnMode;
+    host: string;
+    port: number;
+    transport: ConnTransport;
+    rtuOverIpTransport: ConnTransport;
+    rtuPort: string;
+    rtuBaud: number;
+    rtuDataBits: number;
+    rtuStopBits: number;
+    rtuParity: string;
+    timeoutMs: number;
+    retries: number;
+    interFrameMs: string;
+  };
+  settings: {
+    plcAddrMode: boolean;
+  };
+  activePollIndex: number;
+  polls: Array<{
+    name: string;
+    unitId: number;
+    func: string;
+    startAddr: number;
+    count: number;
+    period: number;
+    writeValue?: string;
+    byteOrder?: ByteOrder;
+    rowStates?: Record<number, RowState>;
+  }>;
+}
+
+async function saveProject() {
+  saveControlsToPoll();
+  const activeIdx = polls.findIndex((p) => p.id === activePollId);
+
+  const project: ProjectFile = {
+    version: 1,
+    appName: "ModbusTool",
+    savedAt: new Date().toISOString(),
+    connection: {
+      mode: selectedMode,
+      host: ($("connHost") as HTMLInputElement).value || "192.168.0.10",
+      port: Number(($("connPort") as HTMLInputElement).value) || 502,
+      transport: selectedTransport,
+      rtuOverIpTransport: rtuOverIpTransport,
+      rtuPort: ($("rtuPort") as HTMLSelectElement).value || "",
+      rtuBaud: Number(($("rtuBaud") as HTMLSelectElement).value) || 9600,
+      rtuDataBits: Number(($("rtuDataBits") as HTMLSelectElement).value) || 8,
+      rtuStopBits: Number(($("rtuStopBits") as HTMLSelectElement).value) || 1,
+      rtuParity: ($("rtuParity") as HTMLSelectElement).value || "none",
+      timeoutMs: Number(($("connTimeout") as HTMLInputElement).value) || 1000,
+      retries: Number(($("connRetries") as HTMLInputElement).value) || 1,
+      interFrameMs: ($("connInterFrame") as HTMLInputElement).value || "",
+    },
+    settings: {
+      plcAddrMode: plcAddrMode,
+    },
+    activePollIndex: activeIdx >= 0 ? activeIdx : 0,
+    polls: polls.map((p) => {
+      const rStates = p.id === activePollId ? Object.fromEntries(rowStates.entries()) : (p.rowStates || {});
+      return {
+        name: p.name,
+        unitId: p.unitId,
+        func: p.func,
+        startAddr: p.startAddr,
+        count: p.count,
+        period: p.period,
+        writeValue: p.writeValue,
+        byteOrder: p.byteOrder || "abcd",
+        rowStates: rStates,
+      };
+    }),
+  };
+
+  try {
+    const jsonStr = JSON.stringify(project, null, 2);
+    const savedPath = await invoke<string>("save_project_file", { content: jsonStr });
+    if (savedPath) {
+      log(`项目已保存至：${savedPath}（共 ${project.polls.length} 个轮询，已导出所有寄存器点位配置）`, "ok");
+    } else {
+      log("已取消保存项目", "info");
+    }
+  } catch (e) {
+    log(`保存项目失败：${String(e)}`, "err");
+  }
+}
+
+async function importProject() {
+  try {
+    const content = await invoke<string>("import_project_file");
+    if (!content) {
+      log("已取消导入项目", "info");
+      return;
+    }
+
+    let data: any;
+    try {
+      data = JSON.parse(content);
+    } catch (e) {
+      uiAlert("无法解析项目文件，JSON 格式可能已损坏。", "导入错误");
+      return;
+    }
+
+    if (!data || !Array.isArray(data.polls) || data.polls.length === 0) {
+      uiAlert("项目文件格式无效或不包含任何轮询配置。", "导入错误");
+      return;
+    }
+
+    // 若当前正在轮询，先停止所有后台轮询
+    if (polling) {
+      await safe(invoke("stop_all_polls"));
+      runningPollIds.clear();
+      setPolling(false);
+    }
+
+    // 1. 恢复连接配置
+    if (data.connection) {
+      const conn = data.connection;
+      if (conn.mode && ["tcp", "rtu", "rtuotcp"].includes(conn.mode)) {
+        selectedMode = conn.mode as ConnMode;
+        const radio = document.querySelector<HTMLInputElement>(`input[name='connMode'][value='${selectedMode}']`);
+        if (radio) radio.checked = true;
+        applyConnMode();
+      }
+      if (conn.host !== undefined) ($("connHost") as HTMLInputElement).value = String(conn.host);
+      if (conn.port !== undefined) ($("connPort") as HTMLInputElement).value = String(conn.port);
+      if (conn.transport && ["tcp", "udp"].includes(conn.transport)) {
+        selectedTransport = conn.transport as ConnTransport;
+        ($("connTransport") as HTMLSelectElement).value = conn.transport;
+      }
+      if (conn.rtuOverIpTransport && ["tcp", "udp"].includes(conn.rtuOverIpTransport)) {
+        rtuOverIpTransport = conn.rtuOverIpTransport as ConnTransport;
+        ($("rtuOverIpTransport") as HTMLSelectElement).value = conn.rtuOverIpTransport;
+      }
+      if (conn.rtuPort !== undefined) ($("rtuPort") as HTMLSelectElement).value = String(conn.rtuPort);
+      if (conn.rtuBaud !== undefined) ($("rtuBaud") as HTMLSelectElement).value = String(conn.rtuBaud);
+      if (conn.rtuDataBits !== undefined) ($("rtuDataBits") as HTMLSelectElement).value = String(conn.rtuDataBits);
+      if (conn.rtuStopBits !== undefined) ($("rtuStopBits") as HTMLSelectElement).value = String(conn.rtuStopBits);
+      if (conn.rtuParity !== undefined) ($("rtuParity") as HTMLSelectElement).value = String(conn.rtuParity);
+      if (conn.timeoutMs !== undefined) ($("connTimeout") as HTMLInputElement).value = String(conn.timeoutMs);
+      if (conn.retries !== undefined) ($("connRetries") as HTMLInputElement).value = String(conn.retries);
+      if (conn.interFrameMs !== undefined) ($("connInterFrame") as HTMLInputElement).value = String(conn.interFrameMs);
+    }
+
+    // 2. 恢复全局显示设置
+    if (data.settings && typeof data.settings.plcAddrMode === "boolean") {
+      plcAddrMode = data.settings.plcAddrMode;
+      $("btnPlcAddr").classList.toggle("active", plcAddrMode);
+    }
+
+    // 3. 恢复轮询配置
+    polls.length = 0;
+    pollDataCache.clear();
+    for (let i = 0; i < data.polls.length; i++) {
+      const p = data.polls[i];
+      const np: PollConfig = {
+        id: nextPollId++,
+        name: p.name || `轮询 ${i + 1}`,
+        unitId: Number(p.unitId) || 1,
+        func: p.func || "03",
+        startAddr: Number(p.startAddr) || 0,
+        count: Number(p.count) || 10,
+        period: Number(p.period) || 500,
+        writeValue: p.writeValue || "",
+        byteOrder: p.byteOrder || "abcd",
+        rowStates: p.rowStates || {},
+      };
+      polls.push(np);
+    }
+
+    // 4. 激活指定轮询标签
+    let targetIdx = 0;
+    if (typeof data.activePollIndex === "number" && data.activePollIndex >= 0 && data.activePollIndex < polls.length) {
+      targetIdx = data.activePollIndex;
+    }
+    activePollId = polls[targetIdx].id;
+
+    // 5. 渲染标签并载入界面与表格
+    renderPollTabs();
+    loadPollToControls(currentPoll());
+    currentData = null;
+    renderTable(currentPoll().startAddr, new Array(currentPoll().count).fill(0));
+    showTableEmpty();
+
+    log(`成功导入项目：恢复了 ${polls.length} 个轮询及所有寄存器点位格式配置`, "ok");
+  } catch (e) {
+    log(`导入项目失败：${String(e)}`, "err");
+  }
+}
+
+// 绑定保存与导入项目按钮
+$("btnSaveProject").addEventListener("click", () => void saveProject());
+$("btnLoadProject").addEventListener("click", () => void importProject());
+
 // Trace 展开隐藏按钮
 $("btnToggleTrace").addEventListener("click", () => {
   const content = $("pollTraceContent") as HTMLElement;
@@ -1593,9 +1845,11 @@ void getCurrentWindow().onCloseRequested(async () => {
 // Command Builder (指令生成已合并至轮询面板)
 // ═══════════════════════════════════════════════════════════
 
-// 初始化：渲染多轮询标签条 + 加载第一个轮询配置
+// 初始化：渲染多轮询标签条 + 加载第一个轮询配置 + 初始表格空态渲染
 renderPollTabs();
 loadPollToControls(polls[0]);
+renderTable(polls[0].startAddr, new Array(polls[0].count).fill(0));
+showTableEmpty();
 // 初始化连接对话框模式字段显示
 applyConnMode();
 
