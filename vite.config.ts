@@ -17,6 +17,7 @@ export default defineConfig({
       input: {
         main: "index.html",
         simulator: "simulator.html",
+        scan: "scan.html",
       },
     },
   },

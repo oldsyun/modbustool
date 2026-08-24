@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unit ID 扫描</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body class="scan-page">
+  <main class="scan-main">
+    <header class="scan-header">
+      <div>
+        <div class="scan-kicker">MODBUS DISCOVERY</div>
+        <h1>Unit ID 扫描</h1>
+      </div>
+      <div class="scan-count"><strong id="responseCount">0</strong><span>个响应</span></div>
+    </header>
+
+    <section class="scan-controls">
+      <label class="pc-group">
+        <span class="pc-label">读取寄存器地址</span>
+        <input id="scanAddress" type="text" inputmode="numeric" value="0x100" placeholder="如 0x100" />
+      </label>
+      <!-- 需求 5：已扫描数量显示在「开始扫描」按钮前方，实时更新（含无响应的 Unit ID） -->
+      <div class="scan-live-count" id="scanLiveCount" title="已扫描的 Unit ID 数量（1~247，含无响应）">
+        <span class="scan-live-label">已扫描</span>
+        <strong id="responseCountInline">0</strong>
+        <span class="scan-live-unit">个</span>
+      </div>
+      <button class="tb-btn primary" id="startScan">▶ 开始扫描</button>
+      <button class="tb-btn" id="stopScan" disabled>■ 停止扫描</button>
+    </section>
+
+    <section class="scan-results" aria-live="polite">
+      <div class="scan-results-head"><span>响应地址</span><span id="scanStatus">等待扫描</span></div>
+      <div id="scanDots" class="scan-dots"></div>
+      <div id="scanEmpty" class="scan-empty">点击“开始扫描”探测 1 至 247 号 Unit ID</div>
+    </section>
+  </main>
+  <script type="module" src="/src/scan.ts"></script>
+</body>
+
+</html>

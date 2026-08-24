@@ -110,6 +110,7 @@ function setConnected(proto: "tcp" | "udp" | "rtu" | "rtuudp") {
   ($("chkAutoPoll") as HTMLInputElement).disabled = false;
   // 端口/串口已打开即可单次发送（与是否轮询无关）
   $("btnSendOnce").disabled = false;
+  ($("btnScan") as HTMLButtonElement).disabled = false;
 }
 
 function setDisconnected() {
@@ -126,7 +127,14 @@ function setDisconnected() {
   const autoPollBtn = $("chkAutoPoll") as HTMLButtonElement;
   autoPollBtn.disabled = true;
   $("btnSendOnce").disabled = true;
+  ($("btnScan") as HTMLButtonElement).disabled = true;
   setPolling(false);
+  void closeScannerWindow();
+}
+
+async function closeScannerWindow() {
+  const scanner = await WebviewWindow.getByLabel("scanner");
+  if (scanner) await scanner.close();
 }
 
 function setPolling(active: boolean) {
@@ -301,6 +309,24 @@ async function refreshSerialPorts() {
   }
 }
 $("btnRefreshPorts").addEventListener("click", refreshSerialPorts);
+
+$("btnScan").addEventListener("click", async () => {
+  const existing = await WebviewWindow.getByLabel("scanner");
+  if (existing) {
+    await existing.setFocus();
+    return;
+  }
+  const scanner = new WebviewWindow("scanner", {
+    url: "scan.html",
+    title: "Unit ID 扫描",
+    width: 720,
+    height: 760,
+    minWidth: 560,
+    minHeight: 520,
+    resizable: true,
+  });
+  scanner.once("tauri://error", (e) => log(`扫描窗口打开失败：${String(e)}`, "err"));
+});
 
 // ═══════════════════════════════════════════════════════════
 // Write Dialog — 由表格行内「写入」按钮触发
