@@ -65,5 +65,5 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Modbus Tool v__VERSION__
           releaseBody: See the assets below to download and install this version.
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
