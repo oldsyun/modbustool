@@ -1118,6 +1118,7 @@ impl MainWindow {
 
         let svc_scan = self.service.clone();
         let svc_sim = self.service.clone();
+        let svc_serial = self.service.clone();
 
         div()
             .h_flex()
@@ -1184,6 +1185,9 @@ impl MainWindow {
                     .on_click(cx.listener(|this, _ev, w, cx| this.import_project(w, cx))),
             )
             .child(div().w(px(8.)))
+            .child(Button::new("btn-serial").label("🔌 串口调试").on_click(
+                move |_ev, _w, cx: &mut App| crate::app::open_serial(svc_serial.clone(), cx),
+            ))
             .child(Button::new("btn-sim").label("⚙ 模拟器").on_click(
                 move |_ev, _w, cx: &mut App| crate::app::open_simulator(svc_sim.clone(), cx),
             ))

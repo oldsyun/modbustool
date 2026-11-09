@@ -80,6 +80,24 @@ pub fn open_simulator(service: Arc<Service>, cx: &mut App) {
     .ok();
 }
 
+pub fn open_serial(service: Arc<Service>, cx: &mut App) {
+    let bounds = Bounds::centered(None, size(px(900.), px(680.)), cx);
+    let svc = service.clone();
+    gpui_kit::open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            titlebar: Some(gpui_kit::gpui::TitlebarOptions {
+                title: Some("串口调试".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        cx,
+        move |window, cx| cx.new(|cx| crate::ui::serial_window::SerialWindow::new(svc.clone(), window, cx)),
+    )
+    .ok();
+}
+
 pub fn open_scanner(service: Arc<Service>, cx: &mut App) {
     let bounds = Bounds::centered(None, size(px(720.), px(760.)), cx);
     let svc = service.clone();

@@ -16,6 +16,7 @@ use tokio::sync::{broadcast, Mutex as AsyncMutex};
 use super::reg::{default_reg_samples, RegListResp, RegisterDef};
 
 mod sim;
+pub mod serial;
 
 pub const CONN_NONE: u8 = 0;
 pub const CONN_TCP: u8 = 1;
@@ -49,6 +50,10 @@ pub enum Event {
     SlaveValues { unit_id: u8, snapshot: ImageSnapshot },
     /// Register definitions of a simulated Unit changed.
     SimRegsUpdated(RegListResp),
+    /// Raw bytes received on the serial debugging port.
+    SerialRx { bytes: Vec<u8>, ts_ms: u64 },
+    /// Serial debugging port opened/closed (or errored).
+    SerialState { open: bool, error: Option<String> },
 }
 
 // ── runtime handles ──────────────────────────────────────────────
@@ -162,6 +167,10 @@ pub struct Service {
     pub slave_mode: AtomicU8,
     /// Broadcast channel to all UI subscribers.
     pub events: broadcast::Sender<Event>,
+    /// Pure serial-debug session (mutually exclusive with the Modbus master).
+    pub serial: Mutex<Option<serial::SerialSession>>,
+    /// Remember last serial port/baud for status display.
+    pub serial_meta: Mutex<(String, u32)>,
 }
 
 impl Service {
@@ -188,6 +197,8 @@ impl Service {
             slave_configs: Mutex::new(HashMap::new()),
             slave_mode: AtomicU8::new(SLAVE_NONE),
             events,
+            serial: Mutex::new(None),
+            serial_meta: Mutex::new((String::new(), 0)),
         })
     }
 
