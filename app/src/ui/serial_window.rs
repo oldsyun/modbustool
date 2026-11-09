@@ -4,54 +4,37 @@
 //! optionally repeat-send, view RX with timestamps, toggle HEX display,
 //! pause/auto-scroll, clear, export log, and see TX/RX byte counters.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use crate::core::service::ORDERING;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use gpui_kit::gpui::prelude::FluentBuilder;
 use gpui_kit::gpui::{
     div, px, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
-    SharedString, StatefulInteractiveElement, Styled, Task, Window,
+    StatefulInteractiveElement, Styled, Task, Window,
 };
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{Disableable, StyledExt};
 
-use crate::core::service::serial::{SerialConfig, SerialStatus};
+use crate::core::service::serial::SerialConfig;
+use crate::core::service::SharedSerialParams;
 use crate::core::service::{Event, Service};
 use crate::ui::common::{bridge_events, theme};
 
-const BAUD_PRESETS: &[u32] = &[1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
-const PARITIES: &[(&str, &str)] = &[("none", "无校验"), ("odd", "奇校验"), ("even", "偶校验")];
-const FLOWS: &[(&str, &str)] = &[("none", "无流控"), ("rtscts", "RTS/CTS"), ("xonxoff", "XON/XOFF")];
 const LINE_ENDINGS: &[(&str, &str)] = &[("none", "无"), ("cr", "CR"), ("lf", "LF"), ("crlf", "CRLF")];
-
-#[derive(Clone, Copy, PartialEq)]
-enum DisplayMode {
-    Text,
-    Hex,
-}
 
 pub struct SerialWindow {
     service: Arc<Service>,
     _events: Option<Task<()>>,
 
-    // connection params
-    ports: Vec<String>,
-    port_idx: usize,
-    baud_idx: usize,
-    data_bits: u8,
-    stop_bits: u8,
-    parity_idx: usize,
-    flow_idx: usize,
-    dtr: bool,
-    rts: bool,
+    // connection: reused from the main page's RTU connection
+    shared: Option<SharedSerialParams>,
     connected: bool,
     status_msg: Option<String>,
 
     // input fields
-    custom_baud: Entity<InputState>,
     tx_input: Entity<InputState>,
 
     // display state
@@ -98,7 +81,6 @@ fn bytes_to_text(b: &[u8]) -> String {
 
 impl SerialWindow {
     pub fn new(service: Arc<Service>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let custom_baud = cx.new(|cx| InputState::new(window, cx).placeholder("115200"));
         let tx_input = cx.new(|cx| InputState::new(window, cx).placeholder("输入要发送的内容…"));
         let repeat_ms_input = cx.new(|cx| InputState::new(window, cx).default_value("1000"));
 
@@ -122,21 +104,13 @@ impl SerialWindow {
             _ => {}
         }));
 
-        let mut me = Self {
+        let shared = service.shared_serial_params();
+        let me = Self {
             service,
             _events,
-            ports: Vec::new(),
-            port_idx: 0,
-            baud_idx: 7, // 115200
-            data_bits: 8,
-            stop_bits: 1,
-            parity_idx: 0,
-            flow_idx: 0,
-            dtr: true,
-            rts: false,
+            shared,
             connected: false,
             status_msg: None,
-            custom_baud,
             tx_input,
             rx_lines: Vec::new(),
             paused: false,
@@ -152,61 +126,46 @@ impl SerialWindow {
             tx_bytes: 0,
             rx_bytes: 0,
         };
-        me.refresh_ports(cx);
         me
     }
 
-    fn refresh_ports(&mut self, cx: &mut Context<Self>) {
-        let svc = self.service.clone();
-        cx.spawn(async move |this, cx| {
-            let ports = svc.list_serial_ports().await.unwrap_or_default();
-            let _ = this.update(cx, |this, cx| {
-                this.ports = ports;
-                if this.port_idx >= this.ports.len() {
-                    this.port_idx = 0;
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+    /// Re-read the main page's current RTU serial parameters (call when the
+    /// window is shown or the main page reconnects).
+    fn reload_shared(&mut self) {
+        self.shared = self.service.shared_serial_params();
     }
 
-    fn current_baud(&self, cx: &Context<Self>) -> u32 {
-        let custom = self.custom_baud.read(cx).value().to_string();
-        if let Ok(v) = custom.trim().parse::<u32>() {
-            if v > 0 {
-                return v;
-            }
+    /// Keep the displayed summary in sync with the main page while disconnected.
+    fn reload_shared_if_closed(&mut self) {
+        if !self.connected {
+            self.reload_shared();
         }
-        BAUD_PRESETS.get(self.baud_idx).copied().unwrap_or(115200)
-    }
-
-    fn build_config(&self, cx: &Context<Self>) -> Option<SerialConfig> {
-        let port = self.ports.get(self.port_idx)?.clone();
-        Some(SerialConfig {
-            port,
-            baud: self.current_baud(cx),
-            data_bits: self.data_bits,
-            stop_bits: self.stop_bits,
-            parity: PARITIES[self.parity_idx].0.to_string(),
-            flow: FLOWS[self.flow_idx].0.to_string(),
-            dtr: self.dtr,
-            rts: self.rts,
-            read_timeout_ms: 50,
-        })
     }
 
     fn connect(&mut self, cx: &mut Context<Self>) {
         if self.connected {
             return;
         }
-        let cfg = match self.build_config(cx) {
-            Some(c) => c,
-            None => {
-                self.status_msg = Some("请选择串口".into());
+        self.reload_shared();
+        let shared = match &self.shared {
+            Some(p) if !p.port.trim().is_empty() => p.clone(),
+            _ => {
+                self.status_msg =
+                    Some("主页面尚未使用 RTU 串口连接，请先在主页面「连接」中选择串口并填写参数".into());
                 cx.notify();
                 return;
             }
+        };
+        let cfg = SerialConfig {
+            port: shared.port,
+            baud: shared.baud,
+            data_bits: shared.data_bits,
+            stop_bits: shared.stop_bits,
+            parity: shared.parity,
+            flow: "none".into(),
+            dtr: true,
+            rts: false,
+            read_timeout_ms: 50,
         };
         let svc = self.service.clone();
         self.status_msg = Some("正在连接…".into());
@@ -390,14 +349,34 @@ impl Drop for SerialWindow {
 impl Render for SerialWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let title = "串口调试";
-        let ports_empty = self.ports.is_empty();
-        let port_label = self
-            .ports
-            .get(self.port_idx)
-            .cloned()
-            .unwrap_or_else(|| "无可用串口".to_string());
+        // Connection parameters are reused from the main page's RTU connection.
+        self.reload_shared_if_closed();
+        let shared = self.shared.clone();
 
-        // ── connection bar ──
+        let param_summary = match &shared {
+            Some(p) if !p.port.trim().is_empty() => format!(
+                "复用主页面串口：{}  {}  {}  {}{}{}",
+                p.port,
+                p.baud,
+                match p.data_bits {
+                    5 => "5",
+                    6 => "6",
+                    7 => "7",
+                    _ => "8",
+                },
+                match p.parity.to_ascii_lowercase().as_str() {
+                    "odd" => "O",
+                    "even" => "E",
+                    _ => "N",
+                },
+                p.stop_bits,
+                "  位/校验/停止位"
+            ),
+            _ => "主页面尚未使用 RTU 串口连接（请先在主页面「连接」中配置串口）".to_string(),
+        };
+        let has_params = matches!(&shared, Some(p) if !p.port.trim().is_empty());
+
+        // ── connection bar (read-only summary + connect/disconnect) ──
         let mut conn_bar = div()
             .h_flex()
             .gap_2()
@@ -410,88 +389,12 @@ impl Render for SerialWindow {
             .border_color(theme::border());
 
         conn_bar = conn_bar
-            .child(div().text_sm().child("端口"))
+            .child(div().text_sm().text_color(theme::text_dim()).child("连接参数"))
             .child(
-                Button::new("port")
-                    .label(SharedString::from(port_label))
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        if !this.connected && !this.ports.is_empty() {
-                            this.port_idx = (this.port_idx + 1) % this.ports.len();
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("refresh")
-                    .label("↻")
-                    .on_click(cx.listener(|this, _ev, _w, cx| this.refresh_ports(cx))),
-            )
-            .child(div().text_sm().child("波特率"))
-            .child(
-                Button::new("baud")
-                    .label(format!("{}", self.current_baud(cx)))
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        if !this.connected {
-                            this.baud_idx = (this.baud_idx + 1) % BAUD_PRESETS.len();
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("databits")
-                    .label(format!("{} 数据位", self.data_bits))
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        if !this.connected {
-                            this.data_bits = if this.data_bits == 8 { 7 } else { 8 };
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("parity")
-                    .label(PARITIES[self.parity_idx].1)
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        if !this.connected {
-                            this.parity_idx = (this.parity_idx + 1) % PARITIES.len();
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("stopbits")
-                    .label(format!("{} 停止位", self.stop_bits))
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        if !this.connected {
-                            this.stop_bits = if this.stop_bits == 1 { 2 } else { 1 };
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("flow")
-                    .label(FLOWS[self.flow_idx].1)
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        if !this.connected {
-                            this.flow_idx = (this.flow_idx + 1) % FLOWS.len();
-                        }
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("dtr")
-                    .label(if self.dtr { "DTR ✓" } else { "DTR" })
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        this.dtr = !this.dtr;
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("rts")
-                    .label(if self.rts { "RTS ✓" } else { "RTS" })
-                    .on_click(cx.listener(|this, _ev, _w, cx| {
-                        this.rts = !this.rts;
-                        cx.notify();
-                    })),
+                div()
+                    .text_sm()
+                    .text_color(if has_params { theme::text() } else { theme::text_tertiary() })
+                    .child(param_summary),
             );
 
         if self.connected {
@@ -506,18 +409,19 @@ impl Render for SerialWindow {
                 Button::new("connect")
                     .primary()
                     .label("连接")
-                    .when(ports_empty, |b| b.disabled(true))
+                    .when(!has_params, |b| b.disabled(true))
                     .on_click(cx.listener(|this, _ev, _w, cx| this.connect(cx))),
             );
         }
 
         let status_text = if self.connected {
+            let (port, baud) = shared
+                .as_ref()
+                .map(|p| (p.port.clone(), p.baud))
+                .unwrap_or_default();
             format!(
                 "● 已连接 {} {}  TX:{} B  RX:{} B",
-                self.ports.get(self.port_idx).cloned().unwrap_or_default(),
-                self.current_baud(cx),
-                self.tx_bytes,
-                self.rx_bytes
+                port, baud, self.tx_bytes, self.rx_bytes
             )
         } else {
             self.status_msg.clone().unwrap_or_else(|| "未连接".to_string())

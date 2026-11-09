@@ -44,7 +44,7 @@ impl Default for SerialConfig {
     }
 }
 
-pub(crate) struct SerialSession {
+pub struct SerialSession {
     writer: SerialPort,
     stop: Arc<AtomicBool>,
     reader: Option<JoinHandle<()>>,

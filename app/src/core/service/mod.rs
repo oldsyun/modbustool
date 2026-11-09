@@ -32,6 +32,18 @@ pub const SLAVE_RTU_UDP: u8 = 16;
 
 pub const ORDERING: Ordering = Ordering::SeqCst;
 
+/// Serial parameters captured from the main page's RTU connection, reused by
+/// the serial-debug window so it does not need its own settings.
+#[derive(Clone, Debug, Default)]
+pub struct SharedSerialParams {
+    pub port: String,
+    pub baud: u32,
+    pub data_bits: u8,
+    pub stop_bits: u8,
+    pub parity: String,
+    pub inter_frame_ms: u64,
+}
+
 /// Backend → UI push events (replaces Tauri `emit`).
 #[derive(Clone)]
 pub enum Event {
@@ -171,6 +183,9 @@ pub struct Service {
     pub serial: Mutex<Option<serial::SerialSession>>,
     /// Remember last serial port/baud for status display.
     pub serial_meta: Mutex<(String, u32)>,
+    /// Main page's latest RTU serial parameters, shared with the serial
+    /// debug window (which reuses them instead of configuring separately).
+    pub shared_serial: Mutex<Option<SharedSerialParams>>,
 }
 
 impl Service {
@@ -199,6 +214,7 @@ impl Service {
             events,
             serial: Mutex::new(None),
             serial_meta: Mutex::new((String::new(), 0)),
+            shared_serial: Mutex::new(None),
         })
     }
 
@@ -363,6 +379,16 @@ impl Service {
         *self.udp.lock().await = None;
         self.conn_type.store(CONN_NONE, ORDERING);
         Ok(())
+    }
+
+    /// Read the main page's latest RTU serial parameters (if any).
+    pub fn shared_serial_params(&self) -> Option<SharedSerialParams> {
+        self.shared_serial.lock().unwrap().clone()
+    }
+
+    /// Record RTU serial parameters (called by the main page's connect flow).
+    pub fn set_shared_serial_params(&self, p: SharedSerialParams) {
+        *self.shared_serial.lock().unwrap() = Some(p);
     }
 
     // ── Frame exchange (the one primitive everything routes through) ──
