@@ -11,19 +11,48 @@ use gpui_kit::component::StyledExt;
 use crate::core::service::{Event, Service};
 
 // ── theme ────────────────────────────────────────────────────────
+// Light theme, matching the original Tauri/web UI palette (src/style.css):
+//   --bg #f5f5f7  --surface #fff  --border #d2d2d7 / #e8e8ed
+//   --text #1d1d1f  --text-secondary #6e6e73  --accent #0071e3
 pub mod theme {
     use gpui_kit::gpui::Rgba;
 
-    pub fn bg() -> Rgba { rgb(0x1e1e1e) }
-    pub fn panel() -> Rgba { rgb(0x252526) }
-    pub fn surface() -> Rgba { rgb(0x2d2d30) }
-    pub fn border() -> Rgba { rgb(0x3e3e42) }
-    pub fn text() -> Rgba { rgb(0xe6e6e6) }
-    pub fn text_dim() -> Rgba { rgb(0x9a9a9a) }
+    /// Page background (main gradient base).
+    pub fn bg() -> Rgba { rgb(0xf5f5f7) }
+
+    /// Toolbar / panel / card background.
+    pub fn panel() -> Rgba { rgb(0xffffff) }
+
+    /// Slightly recessed surface (table headers, inputs background).
+    pub fn surface() -> Rgba { rgb(0xfafafa) }
+
+    /// Strong border (dividers, table lines).
+    pub fn border() -> Rgba { rgb(0xd2d2d7) }
+
+    /// Light border (subtle separators).
+    pub fn border_light() -> Rgba { rgb(0xe8e8ed) }
+
+    /// Primary text.
+    pub fn text() -> Rgba { rgb(0x1d1d1f) }
+
+    /// Secondary / dim text.
+    pub fn text_dim() -> Rgba { rgb(0x6e6e73) }
+
+    /// Tertiary text (placeholders, hints).
+    pub fn text_tertiary() -> Rgba { rgb(0xaeaeb2) }
+
+    /// Accent (links, focus, active tab).
     pub fn accent() -> Rgba { rgb(0x0071e3) }
+
     pub fn green() -> Rgba { rgb(0x34c759) }
     pub fn red() -> Rgba { rgb(0xff3b30) }
     pub fn amber() -> Rgba { rgb(0xff9f0a) }
+
+    /// Zebra striping for table rows (very light gray).
+    pub fn row_alt() -> Rgba { rgb(0xf5f5f7) }
+
+    /// Header background (slightly tinted).
+    pub fn header_bg() -> Rgba { rgb(0xf5f5f7) }
 
     pub fn rgb(hex: u32) -> Rgba {
         gpui_kit::gpui::rgb(hex)

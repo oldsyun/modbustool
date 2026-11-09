@@ -37,6 +37,10 @@ pub fn run() {
     let app_service = service.clone();
     gpui_kit::application().run(move |cx: &mut App| {
         gpui_kit::init(cx);
+        // Force the component library's built-in theme to Light so buttons,
+        // inputs and other widgets match the app's light palette (and don't
+        // follow a dark system appearance).
+        gpui_kit::component::Theme::change(gpui_kit::component::ThemeMode::Light, None, cx);
 
         let bounds = Bounds::centered(None, size(px(1200.), px(800.)), cx);
         let svc = app_service.clone();

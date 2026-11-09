@@ -311,7 +311,7 @@ impl Render for ScannerWindow {
                                                 .py_1()
                                                 .rounded_full()
                                                 .bg(theme::green())
-                                                .text_color(theme::bg())
+                                                .text_color(theme::rgb(0xffffff))
                                                 .text_sm()
                                                 .child(format!("{id}"))
                                         }),
