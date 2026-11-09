@@ -6,6 +6,7 @@
 # Usage: ./scripts/cargo-gpui.sh build|run|check [--release]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mkdir -p "$ROOT/.cargo-home"
 export CARGO_HOME="$ROOT/.cargo-home"
 export CARGO_TARGET_DIR="$ROOT/target-gpui"
 export RUSTC_BOOTSTRAP=1
