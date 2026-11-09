@@ -77,7 +77,7 @@ jobs:
           tar -czf dist/ModbusTool-linux-x86_64.tar.gz -C dist modbus-tool-linux-x86_64
           ls -lh dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: modbus-tool-linux
           path: dist/ModbusTool-linux-x86_64.tar.gz
@@ -108,7 +108,7 @@ jobs:
           Compress-Archive -Path dist/ModbusTool-windows-x64.exe -DestinationPath dist/ModbusTool-windows-x64.zip -Force
           Get-ChildItem dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: modbus-tool-windows
           path: dist/ModbusTool-windows-x64.zip
@@ -118,7 +118,7 @@ jobs:
     needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
 
