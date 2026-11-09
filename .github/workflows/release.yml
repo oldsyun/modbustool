@@ -43,7 +43,7 @@ jobs:
 
   # ── Linux: native binary tarball ─────────────────────────────────
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
 
@@ -116,7 +116,7 @@ jobs:
   # ── Publish all artifacts to a GitHub Release ────────────────────
   release:
     needs: [build-macos, build-linux, build-windows]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/download-artifact@v7
         with:
