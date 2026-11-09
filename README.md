@@ -1,8 +1,10 @@
 # Modbus Tool
 
-一个面向开发、调试和联调的 Modbus 工作台。应用使用 **Tauri 2.x + Rust + Vite + TypeScript** 构建，支持 macOS，并兼顾 Windows / Linux。
+一个面向开发、调试和联调的 Modbus 工作台。应用使用 **Rust + GPUI（gpui-kit）原生 GUI** 构建，支持 macOS，并兼顾 Windows / Linux。
 
 它同时提供 Modbus 主站工作台和内置从站模拟器，可用于验证设备通信、观察底层报文，以及在没有真实从站设备时进行联调。
+
+> 本项目已从 Tauri 2.x + Vite/TypeScript 前端迁移为纯 Rust 原生应用（GPUI）。旧的 `src-tauri/`、`src/`、`index.html` 等已移除。
 
 ## 功能
 
@@ -15,30 +17,46 @@
 - 内置从站模拟器，支持多 Unit、寄存器批量创建、地址冲突检查和寄存器自动变化。
 - 支持模拟器寄存器配置的 Excel `.xlsx` 导入与导出。
 
+## 项目结构
+
+```text
+crates/modbus-core/   Rust Modbus 协议内核、传输层、主站、从站和模拟器（与 UI 无关，可独立测试）
+app/                  GPUI 原生桌面应用
+  src/core/           服务层（状态 + 全部 Modbus 操作 + 事件流，异步 Rust，无 tauri）
+  src/ui/             三个原生窗口：主工作台 / 从站模拟器 / Unit ID 扫描
+scripts/cargo-gpui.sh 构建脚本（封装本仓库所需的构建环境）
+vendor/gpui-pre-macos  为兼容 stable 工具链而本地打补丁的 gpui 平台 crate
+使用说明.md           界面功能和操作细节
+```
+
+协议内核可以独立测试和复用；桌面应用直接调用 Rust 服务层完成通信和模拟器管理（无 WebView、无 JS 桥接）。
+
 ## 快速开始
 
-### 使用桌面应用
+### 环境要求
 
-环境要求：
+- Rust 工具链（stable，已验证 1.97）
+- macOS：**无需完整 Xcode**（使用下方构建脚本即可）
 
-- Node.js 和 npm
-- Rust 工具链
-- Tauri 2 开发环境（系统 WebView、平台编译依赖）
+### 构建与运行
 
-安装依赖并启动开发版本：
+本仓库使用 `gpui-kit 0.9.0`（内含 `gpui-pre 0.3.11`）。该版本引用了 std 的一个不稳定特性，
+因此构建时需要 `RUSTC_BOOTSTRAP=1`；同时仓库内的 `vendor/gpui-pre-macos` 已打补丁。
+为避免污染系统 `~/.cargo`，构建脚本会把 `CARGO_HOME` 指向仓库内的 `.cargo-home/`。
 
-```bash
-npm install
-npm run tauri dev
-```
-
-构建发布包：
+一条命令即可：
 
 ```bash
-npm run tauri build
+./scripts/cargo-gpui.sh run          # 构建并运行
+./scripts/cargo-gpui.sh build        # 仅构建
+./scripts/cargo-gpui.sh build --release
 ```
 
-构建产物位于 `src-tauri/target/release/` 及其平台对应的 bundle 目录中。
+产物位于 `target-gpui/debug/modbus-tool`（或 `release/`）。
+
+> 若你使用完整 Xcode 且想直接调用 cargo，可自行设置：
+> `RUSTC_BOOTSTRAP=1 CARGO_HOME=$PWD/.cargo-home cargo run -p modbus-tool-gpui`。
+> 注意 `[patch.crates-io]` 必须位于工作区根 `Cargo.toml`（已配置）。
 
 ### 验证 Rust 内核
 
@@ -68,19 +86,8 @@ cargo test -p modbus-core
 - 通过 **导入 Excel** / **导出 Excel** 管理当前 Unit 的寄存器配置。
 - 读取未显式配置的地址时，模拟器返回 `0xFFFF`，便于区分“无数据”与有效的零值。
 
-## 项目结构
-
-```text
-crates/modbus-core/   Rust Modbus 协议内核、传输层、主站、从站和模拟器
-src-tauri/            Tauri 命令桥接和桌面应用后端
-src/                  Vite + TypeScript 前端
-使用说明.md           界面功能和操作细节
-```
-
-协议内核可以独立测试和复用；桌面应用通过 Tauri 命令调用 Rust 后端完成通信和模拟器管理。
-
 ## macOS 串口提示
 
-使用 USB-RS485 适配器时，请先安装对应的 FTDI、CH340 或 SiLabs 驱动。串口通常显示为 `/dev/cu.*`。如果系统或打包配置启用了沙箱，还需要为应用配置串口访问权限。
+使用 USB-RS485 适配器时，请先安装对应的 FTDI、CH340 或 SiLabs 驱动。串口通常显示为 `/dev/cu.*`。
 
 更完整的操作步骤、参数说明和模拟器细节，请参阅 [使用说明.md](使用说明.md)。

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/modbus-core", "src-tauri"]
+members = ["crates/modbus-core", "app"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -24,3 +24,7 @@ codegen-units = 1
 strip = true
 # 启用 panic=abort 去掉 unwinding 代码段（可减少约 100-300 KB）
 panic = "abort"
+
+[patch.crates-io]
+# gpui-pre 0.3.11 uses unstable std feature; vendor a patched copy.
+gpui-pre-macos = { path = "vendor/gpui-pre-macos" }

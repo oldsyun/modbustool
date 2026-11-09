@@ -1,0 +1,21 @@
+[package]
+name = "modbus-tool-gpui"
+version = "0.1.0"
+edition = "2021"
+description = "Modbus Tool — native GPUI desktop app (replaces Tauri webview frontend)."
+publish = false
+
+[[bin]]
+name = "modbus-tool"
+path = "src/main.rs"
+
+[dependencies]
+gpui-kit = "=0.9.0"
+modbus-core = { path = "../crates/modbus-core", features = ["rtu"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+rfd = "0.15"
+rust_xlsxwriter = { workspace = true }
+calamine = { workspace = true }
+serial2 = "0.2"

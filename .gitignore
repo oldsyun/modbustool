@@ -1,5 +1,19 @@
-node_modules/
+# Rust build output
 target/
+target-gpui/
+target-spike/
+
+# Workspace-local cargo home (sandbox needs it inside the workspace)
+.cargo-home/
+
+# Local scratch
+.spike-shots/
+*.log
+
+# Web tooling (being removed with the Tauri frontend)
+node_modules/
 dist/
+
+# Editor / OS
 .vscode/
 .DS_Store
