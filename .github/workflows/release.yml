@@ -10,45 +10,128 @@ permissions:
   contents: write
 
 jobs:
+  # ── macOS: .app bundle + zip (+ dmg when available) ──────────────
   build-macos:
     runs-on: macos-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: ". -> target-gpui"
 
-      - name: Build native app
-        # GPUI's pinned gpui-pre uses an unstable std feature; RUSTC_BOOTSTRAP=1
-        # enables it on stable. The vendored gpui-pre-macos patch is applied via
-        # [patch.crates-io] in the workspace Cargo.toml.
+      - name: Build + package
         env:
-          RUSTC_BOOTSTRAP: "1"
-          CARGO_TARGET_DIR: target-gpui
-        run: cargo build -p modbus-tool-gpui --release
-
-      - name: Package macOS app (.app + zip)
-        env:
+          # GPUI's pinned gpui-pre-macos uses an unstable std feature; enable on
+          # stable via RUSTC_BOOTSTRAP. Only macOS needs it (Linux/Windows
+          # platform crates don't use unstable features).
           RUSTC_BOOTSTRAP: "1"
           CARGO_TARGET_DIR: target-gpui
         run: |
           ./scripts/package-macos.sh
-          # If hdiutil/diskutil can create a DMG on the runner, include it;
-          # otherwise ship the zipped .app (always produced).
           ls -lh dist/
 
-      - name: Publish release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modbus-tool-macos
+          path: |
+            dist/ModbusTool-*-macos.zip
+            dist/ModbusTool-*-macos.dmg
+          if-no-files-found: warn
+
+  # ── Linux: native binary tarball ─────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Linux GUI/build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libwayland-dev libwayland-client0 wayland-protocols libwayland-cursor0 \
+            libvulkan-dev libgl1-mesa-dev \
+            libfontconfig1-dev libfreetype-dev \
+            libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target-gpui"
+
+      - name: Build
+        env:
+          CARGO_TARGET_DIR: target-gpui
+        run: cargo build -p modbus-tool-gpui --release
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target-gpui/release/modbus-tool dist/modbus-tool-linux-x86_64
+          tar -czf dist/ModbusTool-linux-x86_64.tar.gz -C dist modbus-tool-linux-x86_64
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modbus-tool-linux
+          path: dist/ModbusTool-linux-x86_64.tar.gz
+
+  # ── Windows: native .exe zip ─────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target-gpui"
+
+      - name: Build
+        shell: pwsh
+        env:
+          CARGO_TARGET_DIR: target-gpui
+        run: cargo build -p modbus-tool-gpui --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target-gpui/release/modbus-tool.exe dist/ModbusTool-windows-x64.exe
+          Compress-Archive -Path dist/ModbusTool-windows-x64.exe -DestinationPath dist/ModbusTool-windows-x64.zip -Force
+          Get-ChildItem dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: modbus-tool-windows
+          path: dist/ModbusTool-windows-x64.zip
+
+  # ── Publish all artifacts to a GitHub Release ────────────────────
+  release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect files
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.dmg" \) -exec cp {} release-files/ \;
+          ls -lh release-files/
+
+      - name: Publish
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          name: Modbus Tool v${{ github.ref_name }}
+          name: Modbus Tool ${{ github.ref_name }}
           draft: true
-          files: |
-            dist/ModbusTool-*-macos.zip
-            dist/ModbusTool-*-macos.dmg
+          files: release-files/*
