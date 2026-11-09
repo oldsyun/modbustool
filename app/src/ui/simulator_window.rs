@@ -1058,18 +1058,18 @@ impl SimulatorWindow {
 
         div()
             .v_flex()
-            .gap_2()
-            .px_3()
-            .py_2()
+            .gap_1()
+            .px_2()
+            .py_1()
             .bg(theme::panel())
             .border_b_1()
             .border_color(theme::border())
             .child(
                 div()
                     .h_flex()
-                    .gap_3()
+                    .gap_2()
                     .items_center()
-                    .child(div().text_lg().font_bold().child("从站模拟器"))
+                    .child(div().text_base().font_bold().child("从站模拟器"))
                     .child(div().flex_1())
                     .child(right),
             )

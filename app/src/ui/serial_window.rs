@@ -379,11 +379,11 @@ impl Render for SerialWindow {
         // ── connection bar (read-only summary + connect/disconnect) ──
         let mut conn_bar = div()
             .h_flex()
-            .gap_2()
+            .gap_1()
             .items_center()
             .flex_wrap()
-            .px_3()
-            .py_2()
+            .px_2()
+            .py_1()
             .bg(theme::panel())
             .border_b_1()
             .border_color(theme::border());
@@ -401,6 +401,7 @@ impl Render for SerialWindow {
             conn_bar = conn_bar.child(
                 Button::new("disconnect")
                     .danger()
+                    .compact()
                     .label("断开")
                     .on_click(cx.listener(|this, _ev, _w, cx| this.disconnect(cx))),
             );
@@ -408,6 +409,7 @@ impl Render for SerialWindow {
             conn_bar = conn_bar.child(
                 Button::new("connect")
                     .primary()
+                    .compact()
                     .label("连接")
                     .when(!has_params, |b| b.disabled(true))
                     .on_click(cx.listener(|this, _ev, _w, cx| this.connect(cx))),
@@ -464,19 +466,21 @@ impl Render for SerialWindow {
 
         let rx_toolbar = div()
             .h_flex()
-            .gap_2()
+            .gap_1()
             .items_center()
-            .px_3()
+            .px_2()
             .py_1()
             .bg(theme::panel())
             .border_b_1()
             .border_color(theme::border_light())
             .child(
                 Button::new("toggle_ts")
+                .compact()
                     .label("时间戳"),
             )
             .child(
                 Button::new("toggle_hex")
+                .compact()
                     .label(if self.show_hex { "HEX 显示 ✓" } else { "HEX 显示" })
                     .on_click(cx.listener(|this, _ev, _w, cx| {
                         this.show_hex = !this.show_hex;
@@ -485,6 +489,7 @@ impl Render for SerialWindow {
             )
             .child(
                 Button::new("autoscroll")
+                .compact()
                     .label(if self.auto_scroll { "自动滚动 ✓" } else { "自动滚动" })
                     .on_click(cx.listener(|this, _ev, _w, cx| {
                         this.auto_scroll = !this.auto_scroll;
@@ -493,6 +498,7 @@ impl Render for SerialWindow {
             )
             .child(
                 Button::new("pause")
+                .compact()
                     .label(if self.paused { "继续" } else { "暂停" })
                     .on_click(cx.listener(|this, _ev, _w, cx| {
                         this.paused = !this.paused;
@@ -501,6 +507,7 @@ impl Render for SerialWindow {
             )
             .child(
                 Button::new("clear")
+                .compact()
                     .label("清空")
                     .on_click(cx.listener(|this, _ev, _w, cx| {
                         this.rx_lines.clear();
@@ -509,6 +516,7 @@ impl Render for SerialWindow {
             )
             .child(
                 Button::new("export")
+                .compact()
                     .label("导出 TXT")
                     .on_click(cx.listener(|this, _ev, _w, cx| this.export_log(cx))),
             );
@@ -528,6 +536,7 @@ impl Render for SerialWindow {
                     .items_center()
                     .child(
                         Button::new("tx_mode")
+                .compact()
                             .label(if self.tx_hex { "HEX" } else { "文本" })
                             .on_click(cx.listener(|this, _ev, _w, cx| {
                                 this.tx_hex = !this.tx_hex;
@@ -537,6 +546,7 @@ impl Render for SerialWindow {
                     .child(div().flex_1().child(Input::new(&self.tx_input).h(px(34.))))
                     .child(
                         Button::new("send")
+                .compact()
                             .primary()
                             .label("发送")
                             .when(!self.connected, |b| b.disabled(true))
@@ -551,6 +561,7 @@ impl Render for SerialWindow {
                     .child(div().text_sm().text_color(theme::text_dim()).child("行结束"))
                     .child(
                         Button::new("line_end")
+                .compact()
                             .label(LINE_ENDINGS[self.line_ending_idx].1)
                             .on_click(cx.listener(|this, _ev, _w, cx| {
                                 this.line_ending_idx =
@@ -561,6 +572,7 @@ impl Render for SerialWindow {
                     .child(div().text_sm().text_color(theme::text_dim()).child("循环发送"))
                     .child(
                         Button::new("repeat")
+                .compact()
                             .label(if self.repeat_on { "停止" } else { "开始" })
                             .when(self.repeat_on, |b| b.primary())
                             .on_click(cx.listener(|this, _ev, _w, cx| this.toggle_repeat(cx))),

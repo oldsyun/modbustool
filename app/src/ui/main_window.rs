@@ -1120,25 +1120,35 @@ impl MainWindow {
         let svc_sim = self.service.clone();
         let svc_serial = self.service.clone();
 
+        // Compact toolbar: small/compact buttons, tight gaps, thin separators.
+        let sep = || {
+            div()
+                .w(px(1.))
+                .h(px(18.))
+                .mx_1()
+                .bg(theme::border_light())
+        };
+
         div()
             .h_flex()
-            .gap_2()
-            .px_3()
-            .py_2()
+            .gap_1()
+            .px_2()
+            .py_1()
             .bg(theme::panel())
             .border_b_1()
             .border_color(theme::border())
             .child(
                 div()
-                    .text_lg()
+                    .text_sm()
                     .font_semibold()
                     .text_color(theme::accent())
-                    .child("▦ Modbus Tool"),
+                    .mr_1()
+                    .child("▦ Modbus"),
             )
-            .child(div().w(px(8.)))
             .child(
                 Button::new("btn-connect")
                     .label(conn_label)
+                    .compact()
                     .on_click(cx.listener(|this, _ev, _w, cx| {
                         if this.connected {
                             this.do_disconnect(cx);
@@ -1151,46 +1161,63 @@ impl MainWindow {
             )
             .child(
                 Button::new("btn-plc")
-                    .label("# PLC 地址")
+                    .label("# PLC")
+                    .compact()
                     .on_click(cx.listener(|this, _ev, _w, cx| this.toggle_plc(cx))),
             )
+            .child(sep())
             .child(
                 Button::new("btn-add-poll")
-                    .label("+ 添加轮询")
+                    .label("+ 轮询")
+                    .compact()
                     .on_click(cx.listener(|this, _ev, w, cx| this.add_poll(w, cx))),
             )
             .child(
                 Button::new("btn-del-poll")
-                    .label("— 删除轮询")
+                    .label("− 轮询")
+                    .compact()
                     .on_click(cx.listener(|this, _ev, w, cx| this.remove_poll(w, cx))),
             )
-            .child(Button::new("btn-scan").label("⌕ 扫描").on_click(
-                move |_ev, _w, cx: &mut App| crate::app::open_scanner(svc_scan.clone(), cx),
-            ))
             .child(
                 Button::new("btn-poll")
                     .label(poll_label)
+                    .compact()
                     .primary()
                     .on_click(cx.listener(|this, _ev, _w, cx| this.toggle_polling(cx))),
             )
-            .child(div().w(px(8.)))
+            .child(Button::new("btn-scan").label("⌕ 扫描").compact().on_click(
+                move |_ev, _w, cx: &mut App| crate::app::open_scanner(svc_scan.clone(), cx),
+            ))
+            .child(sep())
             .child(
                 Button::new("btn-save")
-                    .label("💾 保存项目")
+                    .label("💾 保存")
+                    .compact()
                     .on_click(cx.listener(|this, _ev, _w, cx| this.save_project(cx))),
             )
             .child(
                 Button::new("btn-import")
-                    .label("📂 导入项目")
+                    .label("📂 导入")
+                    .compact()
                     .on_click(cx.listener(|this, _ev, w, cx| this.import_project(w, cx))),
             )
-            .child(div().w(px(8.)))
-            .child(Button::new("btn-serial").label("🔌 串口调试").on_click(
-                move |_ev, _w, cx: &mut App| crate::app::open_serial(svc_serial.clone(), cx),
-            ))
-            .child(Button::new("btn-sim").label("⚙ 模拟器").on_click(
-                move |_ev, _w, cx: &mut App| crate::app::open_simulator(svc_sim.clone(), cx),
-            ))
+            .child(sep())
+            .child(
+                Button::new("btn-serial")
+                    .label("🔌 串口")
+                    .compact()
+                    .on_click(move |_ev, _w, cx: &mut App| {
+                        crate::app::open_serial(svc_serial.clone(), cx)
+                    }),
+            )
+            .child(
+                Button::new("btn-sim")
+                    .label("⚙ 模拟器")
+                    .compact()
+                    .on_click(move |_ev, _w, cx: &mut App| {
+                        crate::app::open_simulator(svc_sim.clone(), cx)
+                    }),
+            )
     }
 
     fn render_poll_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1245,7 +1272,7 @@ impl MainWindow {
         let is_bit = self.is_bit_func();
         let write_func = is_write_func(&func);
 
-        let mut controls = div().h_flex().gap_3().flex_wrap().items_end();
+        let mut controls = div().h_flex().gap_2().flex_wrap().items_end();
         controls = controls
             .child(self.field_wrap("Unit ID", Input::new(&self.in_unit).h(px(30.)).w(px(70.))))
             .child(self.field_wrap("功能码", func_row))
@@ -1279,7 +1306,8 @@ impl MainWindow {
         div()
             .v_flex()
             .gap_2()
-            .p_3()
+            .px_2()
+            .py_2()
             .bg(theme::surface())
             .border_b_1()
             .border_color(theme::border())
@@ -1294,6 +1322,7 @@ impl MainWindow {
                     .child(
                         Button::new("btn-send-once")
                             .label("发送")
+                            .compact()
                             .primary()
                             .on_click(cx.listener(|this, _ev, _w, cx| this.send_once(cx))),
                     )
@@ -1301,6 +1330,7 @@ impl MainWindow {
                     .child(
                         Button::new("btn-toggle-trace")
                             .label(trace_label)
+                            .compact()
                             .on_click(cx.listener(|this, _ev, _w, cx| {
                                 this.show_trace = !this.show_trace;
                                 cx.notify();
