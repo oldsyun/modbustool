@@ -1,4 +1,7 @@
 #![cfg(target_os = "macos")]
+// Needed on stable < 1.98; already stable (and redundant) on >= 1.98, where
+// rustc emits `stable_features`. Allow it either way.
+#![allow(stable_features)]
 #![feature(result_option_map_or_default)]
 //! macOS platform implementation for GPUI.
 //!
