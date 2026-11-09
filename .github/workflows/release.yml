@@ -33,11 +33,15 @@ jobs:
           CARGO_TARGET_DIR: target-gpui
         run: cargo build -p modbus-tool-gpui --release
 
-      - name: Package binary
+      - name: Package macOS app (.app + zip)
+        env:
+          RUSTC_BOOTSTRAP: "1"
+          CARGO_TARGET_DIR: target-gpui
         run: |
-          mkdir -p dist
-          cp target-gpui/release/modbus-tool dist/modbus-tool-macos-aarch64
-          tar -czf dist/modbus-tool-macos-aarch64.tar.gz -C dist modbus-tool-macos-aarch64
+          ./scripts/package-macos.sh
+          # If hdiutil/diskutil can create a DMG on the runner, include it;
+          # otherwise ship the zipped .app (always produced).
+          ls -lh dist/
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -45,4 +49,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Modbus Tool v${{ github.ref_name }}
           draft: true
-          files: dist/modbus-tool-macos-aarch64.tar.gz
+          files: |
+            dist/ModbusTool-*-macos.zip
+            dist/ModbusTool-*-macos.dmg
