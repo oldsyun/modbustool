@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use gpui_kit::gpui::{
-    Context, FocusHandle, IntoElement, ParentElement, Styled, Task,
+    Context, IntoElement, ParentElement, Styled, Task,
 };
 use gpui_kit::component::StyledExt;
 
@@ -47,12 +47,6 @@ pub mod theme {
     pub fn green() -> Rgba { rgb(0x34c759) }
     pub fn red() -> Rgba { rgb(0xff3b30) }
     pub fn amber() -> Rgba { rgb(0xff9f0a) }
-
-    /// Zebra striping for table rows (very light gray).
-    pub fn row_alt() -> Rgba { rgb(0xf5f5f7) }
-
-    /// Header background (slightly tinted).
-    pub fn header_bg() -> Rgba { rgb(0xf5f5f7) }
 
     pub fn rgb(hex: u32) -> Rgba {
         gpui_kit::gpui::rgb(hex)
@@ -109,9 +103,4 @@ where
             }
         }
     })
-}
-
-/// Convenience: a focus handle initializer.
-pub fn init_focus(cx: &mut Context<impl gpui_kit::gpui::Render>) -> FocusHandle {
-    cx.focus_handle()
 }
