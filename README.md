@@ -2,7 +2,7 @@
 
 一个面向开发、调试和联调的 Modbus 工作台。应用使用 **Rust + GPUI（gpui-kit）原生 GUI** 构建，支持 macOS，并兼顾 Windows / Linux。
 
-它同时提供 Modbus 主站工作台和内置从站模拟器，可用于验证设备通信、观察底层报文，以及在没有真实从站设备时进行联调。
+它提供 Modbus 主站工作台、内置从站模拟器、Unit ID 扫描，以及一个纯串口调试终端，可用于验证设备通信、观察底层报文，以及在没有真实从站设备时进行联调。
 
 > 本项目已从 Tauri 2.x + Vite/TypeScript 前端迁移为纯 Rust 原生应用（GPUI）。旧的 `src-tauri/`、`src/`、`index.html` 等已移除。
 
@@ -24,10 +24,12 @@
 crates/modbus-core/   Rust Modbus 协议内核、传输层、主站、从站和模拟器（与 UI 无关，可独立测试）
 app/                  GPUI 原生桌面应用
   src/core/           服务层（状态 + 全部 Modbus 操作 + 事件流，异步 Rust，无 tauri）
-  src/ui/             三个原生窗口：主工作台 / 从站模拟器 / Unit ID 扫描
-scripts/cargo-gpui.sh 构建脚本（封装本仓库所需的构建环境）
-vendor/gpui-pre-macos  为兼容 stable 工具链而本地打补丁的 gpui 平台 crate
-使用说明.md           界面功能和操作细节
+  src/ui/             四个原生窗口：主工作台 / 从站模拟器 / Unit ID 扫描 / 串口调试
+  resources/          应用图标等资源
+scripts/cargo-gpui.sh   构建脚本（封装本仓库所需的构建环境）
+scripts/package-macos.sh macOS 打包脚本（生成 .app 与 zip）
+vendor/gpui-pre-macos   为兼容 stable 工具链而本地打补丁的 gpui 平台 crate
+使用说明.md             界面功能和操作细节
 ```
 
 协议内核可以独立测试和复用；桌面应用直接调用 Rust 服务层完成通信和模拟器管理（无 WebView、无 JS 桥接）。
@@ -59,13 +61,30 @@ vendor/gpui-pre-macos  为兼容 stable 工具链而本地打补丁的 gpui 平�
 > `RUSTC_BOOTSTRAP=1 CARGO_HOME=$PWD/.cargo-home cargo run -p modbus-tool-gpui`。
 > 注意 `[patch.crates-io]` 必须位于工作区根 `Cargo.toml`（已配置）。
 
-### 验证 Rust 内核
-
-无需启动图形界面即可运行核心测试：
+### 运行测试
 
 ```bash
+# 协议内核（31 个测试，无需图形界面）
 cargo test -p modbus-core
+
+# 桌面应用层（服务层回环、串口互斥等）
+./scripts/cargo-gpui.sh test
 ```
+
+### 打包安装包（macOS）
+
+```bash
+./scripts/package-macos.sh
+```
+
+会在 `dist/` 下生成：
+
+- `Modbus Tool.app` —— 完整应用包（已 ad-hoc 签名，可直接运行或拖入「应用程序」）
+- `ModbusTool-<version>-macos.zip` —— 可分发安装包（解压即得 `.app`）
+- `ModbusTool-<version>-macos.dmg` —— 系统允许时会额外生成 DMG（受限环境会跳过，使用 zip 即可）
+
+> 发布到 GitHub 时，`.github/workflows/release.yml` 会在 macOS runner 上构建 `.app`/`.dmg`；
+> GitHub Actions 提供的 runner 无本地沙箱限制，可同时产出 DMG。
 
 ## 主站工作台
 
@@ -79,7 +98,7 @@ cargo test -p modbus-core
 
 ## 从站模拟器
 
-点击工具栏中的 **模拟器** 打开独立的从站模拟器窗口。
+点击工具栏中的 **⚙ 模拟器** 打开独立的从站模拟器窗口。
 
 - 在通道设置中配置并启用 TCP、UDP、RTU over TCP、RTU over UDP 或串口 RTU 通道。
 - 新增寄存器时可设置 Unit、区域、地址、名称、数据类型、访问模式和数量。
@@ -89,7 +108,7 @@ cargo test -p modbus-core
 
 ## 串口调试
 
-点击工具栏的 **🔌 串口调试** 打开独立的串口终端窗口。**连接参数复用主页面配置**：串口调试不再单独设置端口/波特率等，而是直接读取主页面最近一次 RTU 串口连接的参数（端口、波特率、数据位、校验、停止位），显示为只读摘要并据此连接。
+点击工具栏的 **🔌 串口** 打开独立的串口终端窗口。**连接参数复用主页面配置**：串口调试不再单独设置端口/波特率等，而是直接读取主页面最近一次 RTU 串口连接的参数（端口、波特率、数据位、校验、停止位），显示为只读摘要并据此连接。
 
 - 使用前请先在主页面「连接」中选择 RTU 串口并填写参数；串口调试窗口会显示该串口摘要，点击 **连接** 即以同一串口打开（与 Modbus 主站互斥，打开时会先断开 Modbus RTU 连接，关闭后可重新连接）。
 - 接收区显示收到的数据；可切换 **文本 / HEX** 显示、显示时间戳、暂停、清空、导出 TXT。
